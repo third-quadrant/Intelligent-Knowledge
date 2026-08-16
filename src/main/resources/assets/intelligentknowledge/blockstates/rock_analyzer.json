@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "intelligentknowledge:block/rock_analyzer"
+    }
+  }
+}

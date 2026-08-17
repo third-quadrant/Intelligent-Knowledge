@@ -1,6 +1,15 @@
 {
   "block.intelligentknowledge.rock_analyzer": "Rock Analyzer",
   "item.intelligentknowledge.geologist_certificate": "Geologist Bachelor Certificate",
+  "item.intelligentknowledge.bachelor_diploma": "Bachelor Degree Diploma",
+  "item.intelligentknowledge.master_diploma": "Master Degree Diploma",
+  "item.intelligentknowledge.phd_diploma": "PhD Degree Diploma",
+  "item.intelligentknowledge.note": "Note",
   "container.rock_analyzer": "Rock Analyzer",
-  "itemGroup.intelligentknowledge": "Intelligent Knowledge"
+  "itemGroup.intelligentknowledge": "Intelligent Knowledge",
+  "item.intelligentknowledge.random_book_entry": "Unidentified Knowledge Book (Entry)",
+  "item.intelligentknowledge.random_book_bachelor": "Unidentified Knowledge Book (Bachelor)",
+  "item.intelligentknowledge.random_book_master": "Unidentified Knowledge Book (Master)",
+  "item.intelligentknowledge.random_book_phd": "Unidentified Knowledge Book (PhD)",
+  "container.knowledge_book": "Knowledge Book"
 }

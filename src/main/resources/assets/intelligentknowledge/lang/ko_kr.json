@@ -1,6 +1,15 @@
 {
   "block.intelligentknowledge.rock_analyzer": "암석 분석기",
   "item.intelligentknowledge.geologist_certificate": "암석학 학사 자격증",
+  "item.intelligentknowledge.bachelor_diploma": "학사 학위증명서",
+  "item.intelligentknowledge.master_diploma": "석사 학위증명서",
+  "item.intelligentknowledge.phd_diploma": "박사 학위증명서",
+  "item.intelligentknowledge.note": "메모장",
   "container.rock_analyzer": "암석 분석기",
-  "itemGroup.intelligentknowledge": "지적 지식"
+  "itemGroup.intelligentknowledge": "지적 지식",
+  "item.intelligentknowledge.random_book_entry": "미확인 지식책 (입문)",
+  "item.intelligentknowledge.random_book_bachelor": "미확인 지식책 (학사)",
+  "item.intelligentknowledge.random_book_master": "미확인 지식책 (석사)",
+  "item.intelligentknowledge.random_book_phd": "미확인 지식책 (박사)",
+  "container.knowledge_book": "지식 책"
 }

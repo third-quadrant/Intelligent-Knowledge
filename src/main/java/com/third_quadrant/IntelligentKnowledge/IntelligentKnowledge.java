@@ -7,11 +7,17 @@ package com.third_quadrant.intelligentknowledge;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 // 지식조각 어태치먼트(돌 지식조각 개수 저장/동기화). 학문 공통 인프라.
 import com.third_quadrant.intelligentknowledge.attachment.ModAttachments;
+// 독서대 지식 책 인터랙션 핸들러.
+import com.third_quadrant.intelligentknowledge.knowledge.common.LecternHandler;
+// 공부 타이머 관리 (서버 틱 이벤트).
+import com.third_quadrant.intelligentknowledge.knowledge.common.KnowledgeBookMenu;
+import com.third_quadrant.intelligentknowledge.knowledge.common.KnowledgeRegistry;
 // 암석학(돌 지식) 전용: 발전과제 기반 자격(암석학 학사/석사) 판정.
 import com.third_quadrant.intelligentknowledge.knowledge.petrology.RockGates;
 // 레지스트리 등록 클래스들. 블록/아이템/메뉴/크리에이티브 탭을 여기서 모드 버스에 등록한다.
 import com.third_quadrant.intelligentknowledge.registry.ModBlocks;
 import com.third_quadrant.intelligentknowledge.registry.ModCreativeTabs;
+import com.third_quadrant.intelligentknowledge.registry.ModDataComponents;
 import com.third_quadrant.intelligentknowledge.registry.ModItems;
 import com.third_quadrant.intelligentknowledge.registry.ModMenus;
 import net.minecraft.advancements.Advancement;
@@ -22,6 +28,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.LivingEntity;
@@ -51,6 +58,8 @@ import net.neoforged.neoforge.event.entity.living.LivingEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 // RegisterCommandsEvent = 서버가 채팅 명령어를 등록할 때 발생. 테스트용 명령어를 여기에 추가한다.
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 // PlayerEvent = 플레이어 관련 이벤트 부모 클래스.
 // BreakSpeed(채굴 속도 변경, cancel 가능), PlayerLoggedIn(접속 시) 등이 여기 정의되어 있다.
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -69,6 +78,9 @@ public class IntelligentKnowledge {
         // 등록 전에는 player.getData()로 값을 조회할 수 없으므로 반드시 최우선으로 실행해야 한다.
         ModAttachments.register(modBus);
 
+        // DataComponentType 등록 (랜덤 책 속성 저장용).
+        ModDataComponents.register(modBus);
+
         // 암석 분석기 관련 레지스트리(블록/아이템/메뉴/크리에이티브 탭)를 등록한다.
         ModBlocks.register(modBus);
         ModItems.register(modBus);
@@ -85,6 +97,17 @@ public class IntelligentKnowledge {
         NeoForge.EVENT_BUS.addListener(IntelligentKnowledge::onPlayerLoggedIn);
         // 테스트용 명령어 등록도 같은 버스에 구독.
         NeoForge.EVENT_BUS.addListener(IntelligentKnowledge::onRegisterCommands);
+        // 독서대 지식 책 인터랙션 핸들러 등록.
+        NeoForge.EVENT_BUS.addListener(LecternHandler::onRightClickBlock);
+        // 공부 타이머 서버 틱 이벤트 등록.
+        NeoForge.EVENT_BUS.addListener(IntelligentKnowledge::onServerTick);
+    }
+
+    // 서버 틱 이벤트: 공부 타이머 갱신.
+    private static void onServerTick(ServerTickEvent.Pre event) {
+        for (ServerLevel level : event.getServer().getAllLevels()) {
+            KnowledgeBookMenu.tick(level);
+        }
     }
 
     // 점프 이벤트 리스너. LivingJumpEvent는 생명체가 점프할 때 발생한다.
@@ -160,28 +183,64 @@ public class IntelligentKnowledge {
 
     // 접속 시점에 암석학 학사(stone_300) 이상인데 자격증이 없으면 지급한다.
     // (발전과제 보상으로 받은 뒤 조합에서 소모해도, 재접속하면 다시 받을 수 있도록 함)
+    // 학위증명서도 마찬가지로 접속 시 재지급.
     private static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity().level().isClientSide()) {
             return;
         }
 
         ServerPlayer player = (ServerPlayer) event.getEntity();
+        int shards = player.getData(ModAttachments.STONE_KNOWLEDGE_SHARD);
+
         if (RockGates.hasBachelor(player)
                 && !player.getInventory().contains(stack -> stack.is(ModItems.GEOLOGIST_CERTIFICATE.get()))) {
             player.getInventory().add(new ItemStack(ModItems.GEOLOGIST_CERTIFICATE.get()));
         }
+        // 학위증명서 재지급.
+        if (shards >= 300 && !player.getInventory().contains(stack -> stack.is(ModItems.BACHELOR_DIPLOMA.get()))) {
+            player.getInventory().add(new ItemStack(ModItems.BACHELOR_DIPLOMA.get()));
+        }
+        if (shards >= 500 && !player.getInventory().contains(stack -> stack.is(ModItems.MASTER_DIPLOMA.get()))) {
+            player.getInventory().add(new ItemStack(ModItems.MASTER_DIPLOMA.get()));
+        }
+        if (shards >= 1000 && !player.getInventory().contains(stack -> stack.is(ModItems.PHD_DIPLOMA.get()))) {
+            player.getInventory().add(new ItemStack(ModItems.PHD_DIPLOMA.get()));
+        }
     }
 
-    // 마일스톤(100/300/500/1000)에 정확히 도달했을 때만 발전과제를 달성시킨다.
+    // 마일스톤(100/300/500/1000)에 도달했을 때 발전과제를 달성시킨다.
     private static void grantIfMilestone(ServerPlayer player, int shardCount) {
-        if (shardCount == 100 || shardCount == 300 || shardCount == 500 || shardCount == 1000) {
-            grantKnowledgeAdvancement(player, shardCount);
+        int[] milestones = {100, 300, 500, 1000};
+        for (int m : milestones) {
+            if (shardCount >= m) {
+                grantKnowledgeAdvancement(player, shardCount);
+            }
         }
+        // 마일스톤 도달 시 학위증명서 자동 지급.
+        if (shardCount >= 300 && !hasDiploma(player, ModItems.BACHELOR_DIPLOMA.get())) {
+            player.getInventory().add(new ItemStack(ModItems.BACHELOR_DIPLOMA.get()));
+            player.displayClientMessage(Component.literal("§6학사 학위증명서를 받았습니다!"), false);
+        }
+        if (shardCount >= 500 && !hasDiploma(player, ModItems.MASTER_DIPLOMA.get())) {
+            player.getInventory().add(new ItemStack(ModItems.MASTER_DIPLOMA.get()));
+            player.displayClientMessage(Component.literal("§5석사 학위증명서를 받았습니다!"), false);
+        }
+        if (shardCount >= 1000 && !hasDiploma(player, ModItems.PHD_DIPLOMA.get())) {
+            player.getInventory().add(new ItemStack(ModItems.PHD_DIPLOMA.get()));
+            player.displayClientMessage(Component.literal("§d박사 학위증명서를 받았습니다!"), false);
+        }
+    }
+
+    // 인VENTORY에 해당 아이템이 있는지 확인.
+    private static boolean hasDiploma(ServerPlayer player, net.minecraft.world.item.Item item) {
+        return player.getInventory().contains(stack -> stack.is(item));
     }
 
     // 테스트용 명령어. 채팅창에 입력하면 바로 지식조각 개수를 조절할 수 있다.
     // /stone set <개수>  → 개수를 정확히 <개수>개로 설정 (마일스톤이면 발전과제도 바로 달성)
     // /stone add <개수>  → 개수를 <개수>개만큼 추가
+    // /knowledge reset <book_id>  → 특정 책의 독서 진행도를 초기화
+    // /knowledge reset <player> <book_id>  → 특정 플레이어의 특정 책 진행도를 초기화
     private static void onRegisterCommands(RegisterCommandsEvent event) {
         event.getDispatcher().register(Commands.literal("stone")
                 .then(Commands.literal("set").then(Commands.argument("count", IntegerArgumentType.integer(0))
@@ -205,6 +264,48 @@ public class IntelligentKnowledge {
                                     () -> Component.literal("돌 지식조각: " + newCount + "개"), false);
                             return 1;
                         }))));
+
+        // /knowledge reset <book_id>  → 자신의 책 진행도 초기화.
+        // /knowledge reset <player> <book_id>  → 특정 플레이어의 책 진행도 초기화.
+        event.getDispatcher().register(Commands.literal("knowledge")
+                .requires(source -> source.hasPermission(2))
+                .then(Commands.literal("reset")
+                        .then(Commands.argument("book_id", StringArgumentType.word())
+                                .executes(context -> {
+                                    ServerPlayer player = context.getSource().getPlayerOrException();
+                                    String bookId = StringArgumentType.getString(context, "book_id");
+                                    return resetBookProgress(context.getSource(), player, bookId);
+                                })
+                                .then(Commands.argument("target_player",
+                                        net.minecraft.commands.arguments.EntityArgument.players())
+                                        .executes(context -> {
+                                            String bookId = StringArgumentType.getString(context, "book_id");
+                                            var targets = net.minecraft.commands.arguments.EntityArgument
+                                                    .getPlayers(context, "target_player");
+                                            int count = 0;
+                                            for (ServerPlayer target : targets) {
+                                                resetBookProgress(context.getSource(), target, bookId);
+                                                count++;
+                                            }
+                                            return count;
+                                        })))));
+    }
+
+    // 책 진행도 초기화 헬퍼.
+    private static int resetBookProgress(
+            net.minecraft.commands.CommandSourceStack source,
+            ServerPlayer player, String bookId) {
+        if (!KnowledgeRegistry.contains(bookId)) {
+            source.sendFailure(Component.literal("알 수 없는 책 ID: " + bookId));
+            return 0;
+        }
+        var progressMap = new java.util.HashMap<>(player.getData(ModAttachments.BOOK_READ_PROGRESS));
+        int oldValue = progressMap.getOrDefault(bookId, 0);
+        progressMap.remove(bookId);
+        player.setData(ModAttachments.BOOK_READ_PROGRESS, progressMap);
+        source.sendSuccess(() -> Component.literal(
+                player.getName().getString() + "의 [" + bookId + "] 진행도 초기화: " + oldValue + " → 0"), false);
+        return 1;
     }
 
     // 지식 조각 발전과제를 서버에 달성시킨다. 달성 시 클라이언트에 자동으로 발전과제 토스트가 표시된다.

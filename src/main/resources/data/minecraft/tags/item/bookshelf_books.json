@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "intelligentknowledge:random_book_entry",
+    "intelligentknowledge:random_book_bachelor",
+    "intelligentknowledge:random_book_master",
+    "intelligentknowledge:random_book_phd"
+  ]
+}

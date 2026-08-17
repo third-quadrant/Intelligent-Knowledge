@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "PP",
+    "NN"
+  ],
+  "key": {
+    "P": { "item": "minecraft:paper" },
+    "N": { "item": "minecraft:iron_nugget" }
+  },
+  "result": {
+    "id": "intelligentknowledge:note",
+    "count": 1
+  }
+}

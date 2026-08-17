@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "intelligentknowledge:item/random_book_phd"
+  }
+}

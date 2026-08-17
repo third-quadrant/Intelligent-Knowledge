@@ -18,7 +18,10 @@ public class ModBlocks {
             BLOCKS.register("rock_analyzer", () -> new RockAnalyzerBlock(
                     BlockBehaviour.Properties.of()
                             .strength(3.5F)
-                            .sound(SoundType.STONE)));
+                            .sound(SoundType.STONE)
+                            .requiresCorrectToolForDrops()
+                            .noOcclusion()
+            ));
 
     public static void register(IEventBus modBus) {
         BLOCKS.register(modBus);

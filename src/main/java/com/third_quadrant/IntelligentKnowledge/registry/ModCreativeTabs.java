@@ -20,6 +20,16 @@ public class ModCreativeTabs {
             .displayItems((parameters, output) -> {
                 output.accept(ModBlocks.ROCK_ANALYZER.get());
                 output.accept(ModItems.GEOLOGIST_CERTIFICATE.get());
+                output.accept(ModItems.NOTE.get());
+                // 학위증명서.
+                output.accept(ModItems.BACHELOR_DIPLOMA.get());
+                output.accept(ModItems.MASTER_DIPLOMA.get());
+                output.accept(ModItems.PHD_DIPLOMA.get());
+                // 미확인 지식책 (티어별).
+                output.accept(ModItems.RANDOM_BOOK_ENTRY.get());
+                output.accept(ModItems.RANDOM_BOOK_BACHELOR.get());
+                output.accept(ModItems.RANDOM_BOOK_MASTER.get());
+                output.accept(ModItems.RANDOM_BOOK_PHD.get());
             })
             .build());
 

@@ -32,6 +32,8 @@ public class ClientKnowledgeHud {
     private static final int TEXT_GAP = 3;
     // 숫자 색상.
     private static final int TEXT_COLOR = 0xd4d4d4;
+    // HUD 아이콘용 캐시된 ItemStack.
+    private static final ItemStack ICON_ITEM = new ItemStack(Blocks.STONE);
 
     // RegisterGuiLayersEvent = 네오포지가 HUD 레이어를 등록하는 시점에 모드 버스에서 발생시켜 주는 이벤트.
     @SubscribeEvent
@@ -71,7 +73,7 @@ public class ClientKnowledgeHud {
         guiGraphics.pose().pushPose();
         guiGraphics.pose().translate(x, y, 0);
         guiGraphics.pose().scale(ICON_SCALE, ICON_SCALE, 1);
-        guiGraphics.renderItem(new ItemStack(Blocks.STONE), 0, 0);
+        guiGraphics.renderItem(ICON_ITEM, 0, 0);
         guiGraphics.pose().popPose();
 
         // 아이콘 왼쪽에 숫자를 그린다.

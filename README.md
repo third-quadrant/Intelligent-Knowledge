@@ -46,7 +46,7 @@
 
 ### 1.1 NeoForge란?
 
-마인크래프트의 코드를 수정해서 새로운 기능을 추가하는 프레임워크. 원래 마인크래프트 코드를 직접 건드리는 대신, 네오포지가 제공하는 **API**를 통해 모듈式으로 기능을 넣는 방식.
+마인크래프트의 코드를 수정해서 새로운 기능을 추가하는 프레임워크. 원래 마인크래프트 코드를 직접 건드리는 대신, 네오포지가 제공하는 **API**를 통해 모듈 방식으로 기능을 넣는 방식.
 
 ### 1.2 @Mod 어노테이션
 
@@ -67,6 +67,8 @@ public class IntelligentKnowledge { ... }
 
 마인크래프트에서 일어나는 모든 일(블록 파괴, 플레이어 접속, 점프 등)이 **이벤트**로 발생하고, 우리가 **리스너(Listener)** 를 등록해두면 그 이벤트를 받을 수 있다.
 
+**비유:** 신문 구독과 같다. 신문사(이벤트 발생)가 신문을 발행하면, 구독자(리스너)에게 배달된다. 구독하지 않으면 신문을 받을 수 없다.
+
 ```java
 // 등록: "점프 이벤트가 발생하면 onLivingJump 메서드를 호출해줘"
 NeoForge.EVENT_BUS.addListener(IntelligentKnowledge::onLivingJump);
@@ -77,9 +79,15 @@ private static void onLivingJump(LivingEvent.LivingJumpEvent event) {
 }
 ```
 
+**이벤트 버스의 종류:**
+- `NeoForge.EVENT_BUS`: 게임 이벤트 (블록 파괴, 엔티티 데미지 등)
+- `modBus`: 모드 생명주기 이벤트 (레지스트리 등록, 데이터 생성 등)
+
 ### 1.4 DeferredRegister (지연 레지스트리)
 
 마인크래프트의 모든 블록, 아이템, 메뉴는 **레지스트리**에 등록되어야 한다. DeferredRegister는 "나중에 한꺼번에 등록할게"라는 패턴.
+
+**왜 등록이 필요한가?** 마인크래프트는 블록/아이템을 고유 ID로 관리. 등록하지 않으면 게임이 해당 요소를 모름.
 
 ```java
 // 1단계: 레지스트리 객체 생성
@@ -92,6 +100,10 @@ DeferredItem<Item> MY_ITEM = ITEMS.register("my_item",
 // 3단계: 모드 버스에 등록 (이때 실제로 등록됨)
 ITEMS.register(modBus);
 ```
+
+**용어 정리:**
+- **DeferredItem**: 아직 등록되지 않은 아이템의 "예약증". 실제 `Item` 객체는 게임 시작 시 생성됨
+- **모드 버스(modBus)**: 모드 생명주기 이벤트를 처리하는 별도의 이벤트 버스
 
 ### 1.5 DataSlot (데이터 슬롯)
 
@@ -113,12 +125,20 @@ player.setData(ModAttachments.STONE_KNOWLEDGE_SHARD, 100);
 int shards = player.getData(ModAttachments.STONE_KNOWLEDGE_SHARD);
 ```
 
-- `serialize(Codec.INT)`: 디스크에 저장 (서버 재시작 후 유지)
-- `sync(ByteBufCodecs.VAR_INT)`: 서버→클라이언트 동기화 (HUD 표시용)
+- `serialize(Codec.INT)`: 디스크에 저장 (서버 재시작 후 유지). `Codec`은 데이터를 바이트로 변환/복원하는 규칙
+- `sync(ByteBufCodecs.VAR_INT)`: 서버→클라이언트 동기화 (HUD 표시용). `ByteBuf`는 네트워크 전송용 바이트 배열
+
+**DataSlot vs Attachment 사용 시점:**
+- **DataSlot**: 메뉴(UI) 안에서만 동기화. 메뉴가 닫히면 값 소멸
+- **Attachment**: 서버 전체에서 영구 저장. 재접속해도 유지
 
 ### 1.7 DataComponent (데이터 컴포넌트)
 
 마인크래프트 1.21.1의 아이템 커스텀 데이터 시스템. 기존 NBT를 대체하며, 아이템에 **구조화된 데이터**를 붙일 때 사용.
+
+**기존 NBT와의 차이:**
+- NBT: `tag.put("pages", 5)` — 키 이름이 문자열이라 실수하기 쉬움
+- DataComponent: `stack.set(NOTE_PAGES, 5)` — 타입 안전, 컴파일 시점 검증
 
 ```java
 // 정의 (ModDataComponents.java)
@@ -128,6 +148,10 @@ DataComponentType<Integer> NOTE_PAGES = ...;
 stack.set(ModDataComponents.NOTE_PAGES.get(), 5);  // 페이지5 설정
 int pages = stack.get(ModDataComponents.NOTE_PAGES.get());  // 읽기
 ```
+
+**이 모드에서 사용하는 DataComponent:**
+- `random_book_data`: 랜덤 책 확인 후 저장된 책 ID
+- `note_pages`: 메모장에 기록된 페이지 수 (0~200)
 
 ### 1.8 메뉴와 스크린 (컨테이너 패턴)
 
@@ -143,6 +167,14 @@ int pages = stack.get(ModDataComponents.NOTE_PAGES.get());  // 읽기
 - **Screen (스크린)**: 클라이언트에서 실행. 화면에 UI를 그림.
 - `DeferredRegister<MenuType<?>>`로 메뉴 타입을 등록하고, `RegisterMenuScreensEvent`로 스크린과 연결.
 
+**왜 분리하는가?** 마인크래프트는 서버와 클라이언트가 물리적으로 다름 (멀티플레이어). 서버의 데이터를 클라이언트가 화면에 그려야 하므로, DataSlot을 통해 숫자/상태를 동기화.
+
+**실제 동작 흐름:**
+1. 플레이어가 아이템 우클릭 → 서버에서 `KnowledgeBookMenu` 생성
+2. 서버가 `DataSlot`에 값 설정 → 클라이언트에 자동 전송
+3. 클라이언트가 `KnowledgeBookScreen.renderBg()`에서 DataSlot 값 읽어 화면에 표시
+4. 플레이어가 버튼 클릭 → 클라이언트가 서버에 패킷 전송 → 서버가 처리
+
 ### 1.9 Dist.CLIENT
 
 네오포지에서 **클라이언트 전용** 코드를 구분하는 어노테이션.
@@ -151,7 +183,12 @@ int pages = stack.get(ModDataComponents.NOTE_PAGES.get());  // 읽기
 @EventBusSubscriber(modid = "intelligentknowledge", value = Dist.CLIENT)
 ```
 
-서버에는 없는HUD나 GUI 관련 코드는 반드시 `Dist.CLIENT`를 지정해야 서버에서 로딩되지 않는다.
+**왜 필요한가?** 마인크래프트는 서버와 클라이언트가 다름. 서버에는 화면이 없으므로 HUD/GUI 코드가 로드되면 오류 발생. `Dist.CLIENT`로 지정하면 서버에서 해당 클래스를 아예 로딩하지 않음.
+
+**Dist 종류:**
+- `Dist.CLIENT`: 클라이언트에서만 실행 (화면, UI, 사운드 등)
+- `Dist.DEDICATED_SERVER`: 전용 서버에서만 실행
+- 지정하지 않으면 양쪽에서 모두 실행
 
 ---
 
@@ -254,7 +291,7 @@ Intelligent-Knowledge/
 | `onLivingJump` | `LivingJumpEvent` | 점프 시 체력1 회복 (서버만) |
 | `onBlockBreak` | `BlockEvent.BreakEvent` | 돌 채굴 → 확률적으로 지식조각 증가 → 마일스톤 확인 |
 | `onBreakSpeed` | `PlayerEvent.BreakSpeed` | 석사 이상 돌 채굴 속도 ×1.25 |
-| `onPlayerLoggedIn` | `PlayerLoggedInEvent` | 접속 시 자격증/학위증명서 누락분 재지급 |
+| `onPlayerLoggedIn` | `PlayerLoggedInEvent` | 접속 시 입문 학위증명서/학문별 학위증명서 누락분 재지급 |
 | `onRegisterCommands` | `RegisterCommandsEvent` | `/stone set/add`, `/knowledge reset` 명령어 등록 |
 | `LecternHandler::onRightClickBlock` | `RightClickBlock` | 독서대 클릭 시 지식 책 UI 열기 |
 
@@ -262,9 +299,10 @@ Intelligent-Knowledge/
 
 | 메서드 | 역할 |
 |---|---|
-| `grantIfMilestone(player, shardCount)` | 100/300/500/1000개 도달 시 발전과제 + 학위증명서 지급 |
+| `grantIfMilestone(player, shardCount)` | 100/300/500/1000개 도달 시 발전과제 + 학문 접두사 포함 학위증명서 지급 (`>=` 비교) |
 | `grantKnowledgeAdvancement(player, shardCount)` | 발전과제 달성 처리 |
-| `hasDiploma(player, item)` | 인벤토리에 해당 아이템 있는지 확인 |
+| `createDiploma(baseItem, subjectName, diplomaName)` | 학위증명서 ItemStack 생성 (`DataComponents.CUSTOM_NAME`으로 "암석학 학사 학위증명서" 설정) |
+| `hasDiploma(player, item, displayName)` | 인벤토리에 해당 아이템 + 커스텀 이름이 있는지 확인 |
 | `resetBookProgress(source, player, bookId)` | 특정 책 진행도 초기화 |
 
 ---
@@ -300,7 +338,7 @@ Intelligent-Knowledge/
 
 | 필드 | 역할 |
 |---|---|
-| `ICON_ITEM` | 돌 블록 아이템 (캐시) |
+| `ICON_ITEM` | 돌 블록 아이템 (캐시, `static final`) |
 | `ICON_SIZE = 16` | 아이콘 크기 |
 | `ICON_SCALE = 0.4F` | 축소 배율 |
 
@@ -328,7 +366,7 @@ Intelligent-Knowledge/
 6. 구분선
 7. 이해도 게이지 (████░░░░ 50%)
 8. 공부 중 → 진행 바 + 획득 조각 + 남은 시간
-9. 공부 전 → 예상 시간 + 예상 조각
+9. 공부 전 → 예상 시간 + 예상 조각 + 과목 아이콘 (현재: 돌 아이템)
 
 **버튼**: "공부" (한 번 클릭으로 시작), "가져가기" (언제나 활성화)
 
@@ -351,12 +389,14 @@ Intelligent-Knowledge/
 | 필드/메서드 | 역할 |
 |---|---|
 | `MAX_PAGES = 200` | 최대 페이지 수 |
-| `getMaxStackSize(stack)` | 페이지0이면16개, 아니면1개 스택 |
 | `appendHoverText()` | `§7[페이지] 0/200` 툴팁 표시 |
 | `getPageCount(stack)` | DataComponent에서 페이지 수 읽기 |
 | `setPageCount(stack, pages)` | 페이지 수 설정 |
-| `addPage(stack)` | 페이지 +1 |
+| `addPage(stack)` | 페이지 +1 (실시간으로 즉시 기록) |
 | `canUse(stack)` | pages < 200이면 true |
+
+- `ModItems`에서 `stacksTo(1)`으로 등록 (스택 불가)
+- `getMaxStackSize` 오버라이드 제거 (기본값 1 사용)
 
 ---
 
@@ -435,7 +475,7 @@ record KnowledgeBookDefinition(
 )
 ```
 
- compact 생성자에서 `maxShards`와 `baseReward`를 티어 기본값으로 자동 계산.
+compact 생성자에서 `maxShards`와 `baseReward`를 티어 기본값으로 자동 계산.
 
 #### `KnowledgeRegistry.java` — 동적 책 레지스트리
 
@@ -468,6 +508,7 @@ record KnowledgeBookDefinition(
 | `FIELDS` | 학문 목록 (현재 "petrology"만) |
 | `AUTHORS` |14명의 한국어 저자 이름 목록 |
 | `RARITY_TABLE[100]` | 희귀도 가중치 테이블 |
+| `ICON` | `Items.STONE` (UI 과목 아이콘용 캐시) |
 
 **핵심 메서드:**
 
@@ -475,7 +516,7 @@ record KnowledgeBookDefinition(
 |---|---|
 | `isIdentified(stack)` | DataComponent 있으면 확인 완료 |
 | `identifyBook(stack, id)` | 랜덤 속성 생성 → 레지스트리 등록 → DataComponent 설정 |
-| `generateRandomBook(rng)` | 완전 랜덤 책 생성 (난이도/필드/희귀도/유형/저자/제목) |
+| `generateRandomBook(rng)` | 완전 랜덤 책 생성 (ThreadLocalRandom 사용) |
 | `getTierCap(field)` | 티어별 최대 난이도: 입문200/학사500/석사1000/박사2000 |
 | `getRarityMultiplier(rarity)` | 희귀도별 배율: 일반0.25/고급0.50/희귀0.75/매우희귀0.90/전설1.00 |
 | `getBaseRewardForRarity(rarity)` | 희귀도별 기본 보상: 일반6/고급15/희귀25/매우희귀40/전설60 |
@@ -498,18 +539,19 @@ record KnowledgeBookDefinition(
 | `elapsedTicks` | 경과 틱 |
 | `grantedShards` | 이번 루프에서 이미 획득한 조각 |
 | `cycleCount` | 완료된 사이클 수 |
+| `snapshotKnowledge` | 공부 시작 시점의 지식 조각 스냅샷 |
 
 **주요 흐름:**
 
 1. **공부 시작** (`handleStudyStart`): 검증 → 총 보상 계산 → 스냅샷 저장 → `ActiveStudy` 생성
-2. **틱 업데이트** (`tick`): 매서버 틱마다 → 조각 지급 → 사이클 완료 시 → 다음 사이클 또는 종료
-3. **노트 사용** (`useNote`): 학습 완료 후 인벤토리에서 노트1개 탐색 → 페이지 사용 → 루프 재시작
+2. **틱 업데이트** (`tick`): 매서버 틱마다 → 조각 지급 시 즉시 메모장에 페이지 기록 → 사이클 완료 시 → 다음 사이클 또는 종료
+3. **노트 사용** (`useNote`): 유효성 검사만 수행 (페이지 추가는 `tick()`에서 처리)
 4. **완료** (`completeStudy`): 효과음 → 메시지 → 마일스톤 → 메뉴 닫기
 
-**노트 자동 루프:**
-- 공부 완료 → `useNote()` 호출 → 노트 있으면1페이지 사용 + 남은 보상 재계산 + 루프 재시작
-- 노트 없거나200페이지 도달 → 종료
-- 스택된 노트는 `split(1)`로 분리 후 사용
+**노트 실시간 기록:**
+- `tick()`에서 매 cycleTicks마다 조각 지급 시, 즉시 인벤토리의 메모장에 페이지 추가
+- `BOOK_PAGE_TURN` 사운드 재생
+- 메모장 없거나 모두200페이지 → `"§c메모장이 없습니다! 공부를 중단합니다."` → 공부 중단
 
 #### `LecternHandler.java` — 독서대 인터랙션
 
@@ -520,6 +562,7 @@ record KnowledgeBookDefinition(
 2. **시프트+우클릭** → 책을 인벤토리로 가져가기
 3. **확인된 책** → 바로 UI 열기
 4. **미확인 책** → 자동 확인 → 메시지 표시 → UI 열기
+5. 확인 후 독서대에 책 동기화 (`lectern.setBook(bookStack)` + `setChanged()`)
 
 ---
 
@@ -563,11 +606,11 @@ record KnowledgeBookDefinition(
 | 아이템 | 클래스 | 비고 |
 |---|---|---|
 | `ROCK_ANALYZER` | `BlockItem` | 블록 아이템 |
-| `GEOLOGIST_CERTIFICATE` | `Item` | 암석학 학사 자격증 |
-| `BACHELOR_DIPLOMA` | `Item` | 학사 학위증명서 |
-| `MASTER_DIPLOMA` | `Item` | 석사 학위증명서 |
-| `PHD_DIPLOMA` | `Item` | 박사 학위증명서 |
-| `NOTE` | `NoteItem` | 메모장 (stacksTo16) |
+| `GEOLOGIST_CERTIFICATE` | `Item` | 입문 학위증명서 |
+| `BACHELOR_DIPLOMA` | `Item` | 학사 학위증명서 (학문 접두사 포함) |
+| `MASTER_DIPLOMA` | `Item` | 석사 학위증명서 (학문 접두사 포함) |
+| `PHD_DIPLOMA` | `Item` | 박사 학위증명서 (학문 접두사 포함) |
+| `NOTE` | `NoteItem` | 메모장 (stacksTo1, 페이지0~200) |
 | `RANDOM_BOOK_ENTRY` | `RandomKnowledgeBookItem` | 난이도0~299 |
 | `RANDOM_BOOK_BACHELOR` | `RandomKnowledgeBookItem` | 난이도300~499 |
 | `RANDOM_BOOK_MASTER` | `RandomKnowledgeBookItem` | 난이도500~999 |
@@ -625,9 +668,9 @@ onBlockBreak() 호출 (서버만)
     │
     └─ grantIfMilestone() 호출
         ├─ 100개 → "암석학 입문" 발전과제
-        ├─ 300개 → "암석학 학사" 발전과제 + 학사 학위증명서 지급
-        ├─ 500개 → "암석학 석사" 발전과제 + 석사 학위증명서 지급
-        └─ 1000개 → "암석학 박사" 발전과제 + 박사 학위증명서 지급
+        ├─ 300개 → "암석학 학사" 발전과제 + "암석학 학사 학위증명서" 지급
+        ├─ 500개 → "암석학 석사" 발전과제 + "암석학 석사 학위증명서" 지급
+        └─ 1000개 → "암석학 박사" 발전과제 + "암석학 박사 학위증명서" 지급
 ```
 
 ### 4.2 랜덤 지식 책 시스템
@@ -681,31 +724,33 @@ handleStudyStart()
          │   ├─ DataSlot 갱신 (클라이언트 UI 반영)
          │   └─ 남은 보상 계산
          │
-         └─ 사이클 완료 (elapsedTicks >= durationTicks):
-             ├─ 전체 보상 소진? → 완료 처리
-             ├─ 노트 사용 가능? → useNote() → 루프 재시작
-             └─ 다음 사이클 → gap 재계산 → duration/cycleTicks 갱신
+          └─ 사이클 완료 (elapsedTicks >= durationTicks):
+              ├─ 전체 보상 소진? → 완료 처리
+              ├─ 노트 사용 가능? → useNote() → BOOK_PAGE_TURN 사운드 + 루프 재시작
+              ├─ 인벤토리 가득 참 → 경고 메시지 + 공부 종료
+              └─ 다음 사이클 → gap 재계산 → duration/cycleTicks 갱신
 ```
 
-### 4.4 노트 자동 루프 시스템
+### 4.4 메모장 실시간 페이지 기록 시스템
 
 ```
-학습 완료
+tick()에서 조각 지급 시 (cycleTicks마다):
     │
-    ▼
-useNote(player) 호출
+    ├─ usable note 탐색 (pages < 200)
     │
-    ├─ 인벤토리에서 페이지0~199 노트 탐색
+    ├─ 노트 발견 시:
+    │   ├─ NoteItem.addPage(note) → 즉시 페이지 +1
+    │   ├─ BOOK_PAGE_TURN 사운드 재생
+    │   └─ 공부 계속 진행
     │
-    ├─ 노트 있으면:
-    │   ├─ 스택2개 이상 → split(1)로 분리
-    │   ├─ addPage(single) → 페이지 +1
-    │   ├─ 실제 책 진행도로 남은 보상 재계산
-    │   ├─ grantedShards=0 초기화
-    │   └─ duration/cycleTicks 갱신 → 루프 재시작
-    │
-    └─ 노트 없거나 모두200페이지:
-        └─ completeStudy() → 종료
+    └─ 노트 미발견 시:
+        ├─ 경고 메시지: "§c메모장이 없습니다! 공부를 중단합니다."
+        └─ 공부 중단 (completeStudy 호출)
+
+cycle 완료 후:
+    ├─ 전체 보상 소진? → 완료 처리
+    ├─ 다음 cycle → gap 재계산 → duration/cycleTicks 갱신
+    └─ useNote()는 유효성 검사만 수행 (페이지 추가는 tick()에서 처리)
 ```
 
 ### 4.5 스냅샷 시스템
@@ -775,10 +820,9 @@ tierCap: 입문=200, 학사=500, 석사=1000, 박사=2000
 ### 5.6 메모장
 
 - 최대 페이지: 200
-- 페이지0: 16개 스택 가능
-- 페이지1+: 1개씩만 스택
+- stacksTo(1) (스택 불가)
+- 페이지 추가: `tick()`에서 조각 지급 시 즉시 기록 (cycle 완료 후 아님)
 - 조합법: 종이2개 + 철조각2개 (모양: PP/NN)
-- 첫 사이클에서는 사용 안 됨
 
 ---
 
@@ -841,8 +885,8 @@ tierCap: 입문=200, 학사=500, 석사=1000, 박사=2000
 1. `knowledge/<학문명>/` 패키지 생성
 2. `<학문>AnalyzerBlock.java` — 블록 구현
 3. `<학문>AnalyzerMenu.java` — 메뉴 구현
-4. `<学문>Gates.java` — 자격 판정 (발전과제 기반)
-5. `<学문>Types.java` — 학문별 아이템/변환 목록
+4. `<학문>Gates.java` — 자격 판정 (발전과제 기반)
+5. `<학문>Types.java` — 학문별 아이템/변환 목록
 6. `RandomKnowledgeBookItem.FIELDS`에 새 학문 이름 추가
 7. `ModBlocks`, `ModItems`, `ModMenus`에 새 항목 등록
 8. 발전과제 JSON 추가
@@ -892,3 +936,45 @@ tierCap: 입문=200, 학사=500, 석사=1000, 박사=2000
 - 중간 마일스톤 (150, 200, 400, 750 등)
 - 학문별 독립 발전과제
 - 숨겨진 발전과제 (특수 조건)
+
+### 9.8 주민 시스템 리서치
+
+#### 주민 머리 방향 고정 (아래쪽)
+
+| 항목 | 내용 |
+|---|---|
+| **가능성** | 가능 (매 틱마다 강제 설정 필요) |
+| **권장 방식** | `LivingEvent.LivingTickEvent`에서 `setXRot(90.0F)` 강제 |
+| **이동 지장** | 없음 (`LookControl`과 `MoveControl`은 독립) |
+| **주의사항** | 한 번만 설정하면 AI가 덮어씀. 매 틱 반복 필수 |
+
+```java
+@SubscribeEvent
+public static void onLivingTick(LivingEvent.LivingTickEvent event) {
+    Entity entity = event.getEntity();
+    if (entity instanceof Villager) {
+        entity.setXRot(90.0F);  // 정면 아래
+        entity.xRotO = 90.0F;  // 이전 틱 보간용
+    }
+}
+```
+
+#### 주민 교배 API
+
+| API | 설명 | 주민 전용 여부 |
+|---|---|---|
+| `BabyEntitySpawnEvent` | 교배 직전 발생, 취소/자녀 변경 가능 | 모든 Animal |
+| `VillagerTradesEvent` | 거래 목록 수정 | 주민 전용 |
+| `FinalizeSpawnEvent` | 모든 스폰 시 발생 (교배 포함) | 모든 Mob |
+
+- **제한**: 주민-specific 교배 제어 이벤트는 없음
+- vanilla `VillagerMakeLove` brain behavior에 직접 접근 필요
+- 교배 조건(음식, 침대) 제어를 위한 별도 이벤트 없음
+
+#### 타사 주민 API (참고용)
+
+| 모드 | 기능 | NeoForge 1.21.1 지원 |
+|---|---|---|
+| **Villager API** (frikinjay) | 데이터 기반 커스텀 직업/타입/거래 | O (v1.26.1.3) |
+| **Villager Overhaul** (Z2SIX) | 주민 AI/전투/거래 개선 | O (v3.0.0) |
+| **Easy Villagers** | 주민 관리 간소화 | O |

@@ -23,6 +23,7 @@ import com.third_quadrant.intelligentknowledge.registry.ModMenus;
 import net.minecraft.advancements.Advancement;
 import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.commands.Commands;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
@@ -124,7 +125,7 @@ public class IntelligentKnowledge {
         }
     }
 
-    // 블록 채굴 이벤트 리스너. BreakEvent는 블록이 실제로 부서지기 직전에 발생한다.
+    // 블록 채굴 이벤 트 리스너. BreakEvent는 블록이 실제로 부서지기 직전에 발생한다.
     private static void onBlockBreak(BlockEvent.BreakEvent event) {
         // event.getPlayer(): 블록을 부순 플레이어. Player 타입이므로 UUID·메시지 전송 기능 사용 가능.
         Player player = event.getPlayer();
@@ -196,15 +197,15 @@ public class IntelligentKnowledge {
                 && !player.getInventory().contains(stack -> stack.is(ModItems.GEOLOGIST_CERTIFICATE.get()))) {
             player.getInventory().add(new ItemStack(ModItems.GEOLOGIST_CERTIFICATE.get()));
         }
-        // 학위증명서 재지급.
-        if (shards >= 300 && !player.getInventory().contains(stack -> stack.is(ModItems.BACHELOR_DIPLOMA.get()))) {
-            player.getInventory().add(new ItemStack(ModItems.BACHELOR_DIPLOMA.get()));
+        // 학위증명서 재지급 (학문 이름 접두사 포함).
+        if (shards >= 300 && !hasDiploma(player, ModItems.BACHELOR_DIPLOMA.get(), "암석학 학사 학위증명서")) {
+            player.getInventory().add(createDiploma(ModItems.BACHELOR_DIPLOMA.get(), "암석학", "학사 학위증명서"));
         }
-        if (shards >= 500 && !player.getInventory().contains(stack -> stack.is(ModItems.MASTER_DIPLOMA.get()))) {
-            player.getInventory().add(new ItemStack(ModItems.MASTER_DIPLOMA.get()));
+        if (shards >= 500 && !hasDiploma(player, ModItems.MASTER_DIPLOMA.get(), "암석학 석사 학위증명서")) {
+            player.getInventory().add(createDiploma(ModItems.MASTER_DIPLOMA.get(), "암석학", "석사 학위증명서"));
         }
-        if (shards >= 1000 && !player.getInventory().contains(stack -> stack.is(ModItems.PHD_DIPLOMA.get()))) {
-            player.getInventory().add(new ItemStack(ModItems.PHD_DIPLOMA.get()));
+        if (shards >= 1000 && !hasDiploma(player, ModItems.PHD_DIPLOMA.get(), "암석학 박사 학위증명서")) {
+            player.getInventory().add(createDiploma(ModItems.PHD_DIPLOMA.get(), "암석학", "박사 학위증명서"));
         }
     }
 
@@ -216,24 +217,34 @@ public class IntelligentKnowledge {
                 grantKnowledgeAdvancement(player, shardCount);
             }
         }
-        // 마일스톤 도달 시 학위증명서 자동 지급.
-        if (shardCount >= 300 && !hasDiploma(player, ModItems.BACHELOR_DIPLOMA.get())) {
-            player.getInventory().add(new ItemStack(ModItems.BACHELOR_DIPLOMA.get()));
-            player.displayClientMessage(Component.literal("§6학사 학위증명서를 받았습니다!"), false);
+        // 마일스톤 도달 시 학위증명서 자동 지급 (학문 이름 접두사 포함).
+        if (shardCount >= 300 && !hasDiploma(player, ModItems.BACHELOR_DIPLOMA.get(), "암석학 학사 학위증명서")) {
+            player.getInventory().add(createDiploma(ModItems.BACHELOR_DIPLOMA.get(), "암석학", "학사 학위증명서"));
+            player.displayClientMessage(Component.literal("§6암석학 학사 학위증명서를 받았습니다!"), false);
         }
-        if (shardCount >= 500 && !hasDiploma(player, ModItems.MASTER_DIPLOMA.get())) {
-            player.getInventory().add(new ItemStack(ModItems.MASTER_DIPLOMA.get()));
-            player.displayClientMessage(Component.literal("§5석사 학위증명서를 받았습니다!"), false);
+        if (shardCount >= 500 && !hasDiploma(player, ModItems.MASTER_DIPLOMA.get(), "암석학 석사 학위증명서")) {
+            player.getInventory().add(createDiploma(ModItems.MASTER_DIPLOMA.get(), "암석학", "석사 학위증명서"));
+            player.displayClientMessage(Component.literal("§5암석학 석사 학위증명서를 받았습니다!"), false);
         }
-        if (shardCount >= 1000 && !hasDiploma(player, ModItems.PHD_DIPLOMA.get())) {
-            player.getInventory().add(new ItemStack(ModItems.PHD_DIPLOMA.get()));
-            player.displayClientMessage(Component.literal("§d박사 학위증명서를 받았습니다!"), false);
+        if (shardCount >= 1000 && !hasDiploma(player, ModItems.PHD_DIPLOMA.get(), "암석학 박사 학위증명서")) {
+            player.getInventory().add(createDiploma(ModItems.PHD_DIPLOMA.get(), "암석학", "박사 학위증명서"));
+            player.displayClientMessage(Component.literal("§d암석학 박사 학위증명서를 받았습니다!"), false);
         }
     }
 
-    // 인VENTORY에 해당 아이템이 있는지 확인.
-    private static boolean hasDiploma(ServerPlayer player, net.minecraft.world.item.Item item) {
-        return player.getInventory().contains(stack -> stack.is(item));
+    // 학위증명서 ItemStack 생성 (학문 이름 접두사 포함 커스텀 이름 설정).
+    private static ItemStack createDiploma(net.minecraft.world.item.Item baseItem,
+                                           String subjectName, String diplomaName) {
+        ItemStack stack = new ItemStack(baseItem);
+        stack.set(DataComponents.CUSTOM_NAME, Component.literal(subjectName + " " + diplomaName));
+        return stack;
+    }
+
+    // 인벤토리에 해당 아이템 + 커스텀 이름이 있는지 확인.
+    private static boolean hasDiploma(ServerPlayer player, net.minecraft.world.item.Item item, String displayName) {
+        return player.getInventory().contains(stack ->
+                stack.is(item) && stack.has(DataComponents.CUSTOM_NAME)
+                        && stack.get(DataComponents.CUSTOM_NAME).getString().equals(displayName));
     }
 
     // 테스트용 명령어. 채팅창에 입력하면 바로 지식조각 개수를 조절할 수 있다.

@@ -305,9 +305,27 @@ public class KnowledgeBookMenu extends AbstractContainerMenu {
             menu.dsStudyState.set(1);
             menu.dsStudyPercent.set(percent);
 
-            // ─── 주기적 보상: cycleTicks마다 1조각 지급 ───
+            // ─── 주기적 보상: cycleTicks마다 1조각 지급 + 실시간 메모장 작성 ───
             if (study.totalReward > 0 && study.grantedShards < study.totalReward
                     && study.elapsedTicks >= (long) (study.grantedShards + 1) * study.cycleTicks) {
+                // 사용 가능한 메모장 확인 — 없으면 경고 후 공부 중단.
+                var inv = player.getInventory();
+                ItemStack noteStack = null;
+                for (int si = 0; si < inv.getContainerSize(); si++) {
+                    ItemStack s = inv.getItem(si);
+                    if (s.is(ModItems.NOTE.get()) && NoteItem.canUse(s)) {
+                        noteStack = s;
+                        break;
+                    }
+                }
+                if (noteStack == null) {
+                    player.displayClientMessage(
+                            net.minecraft.network.chat.Component.literal("§c사용 가능한 메모장이 없습니다. 공부를 중단합니다."), true);
+                    ACTIVE_STUDIES.remove(uuid);
+                    study.menu.completeStudy(player, study);
+                    continue;
+                }
+
                 int playerShards = player.getData(ModAttachments.STONE_KNOWLEDGE_SHARD);
                 player.setData(ModAttachments.STONE_KNOWLEDGE_SHARD, playerShards + 1);
 
@@ -316,6 +334,17 @@ public class KnowledgeBookMenu extends AbstractContainerMenu {
                 pMap.put(study.bookId, bookProg + 1);
                 player.setData(ModAttachments.BOOK_READ_PROGRESS, pMap);
                 menu.dsProgress.set(bookProg + 1);
+
+                // 지식조각 획득과 동시에 메모장에 페이지 작성 (실시간).
+                NoteItem.addPage(noteStack);
+                if (!NoteItem.canUse(noteStack)) {
+                    for (int ri = 0; ri < inv.getContainerSize(); ri++) {
+                        if (inv.getItem(ri) == noteStack) {
+                            inv.removeItemNoUpdate(ri);
+                            break;
+                        }
+                    }
+                }
 
                 study.grantedShards++;
                 menu.dsGrantedShards.set(study.grantedShards);
@@ -358,6 +387,9 @@ public class KnowledgeBookMenu extends AbstractContainerMenu {
                                 study.elapsedTicks = 0;
                                 menu.dsStudyPercent.set(0);
                                 menu.dsGrantedShards.set(0);
+                                // 노트 사용 시 책장 넘기는 사운드 재생.
+                                level.playSound(null, study.lecternPos, SoundEvents.BOOK_PAGE_TURN,
+                                        SoundSource.PLAYERS, 1.0F, 1.0F);
                                 LOGGER.info("[IK] Note used, loop restarted: book={} newTotal={} newDur={}",
                                         study.bookId, newTotal, newDur);
                                 continue;
@@ -393,29 +425,18 @@ public class KnowledgeBookMenu extends AbstractContainerMenu {
         ACTIVE_STUDIES.remove(playerUuid);
     }
 
-    // 인벤토리에서 노트1개 분리 → 페이지 사용. 사용 가능하면 true.
+    // 인벤토리에서 사용 가능한 노트(페이지 <200)가 있는지 확인만 한다.
+    // 페이지 추가는 tick()에서 지식조각 획득 시점에 실시간으로 처리.
     private static boolean useNote(ServerPlayer player) {
         var inv = player.getInventory();
         for (int i = 0; i < inv.getContainerSize(); i++) {
             ItemStack stack = inv.getItem(i);
             if (stack.is(ModItems.NOTE.get()) && NoteItem.canUse(stack)) {
-                // 스택이2개 이상이면1개 분리.
-                if (stack.getCount() > 1) {
-                    ItemStack single = stack.split(1);
-                    NoteItem.addPage(single);
-                    // 분리한 노트를 인벤토리에 추가.
-                    if (!inv.add(single)) {
-                        player.drop(single, false);
-                    }
-                } else {
-                    NoteItem.addPage(stack);
-                    if (!NoteItem.canUse(stack)) {
-                        inv.removeItemNoUpdate(i);
-                    }
-                }
                 return true;
             }
         }
+        player.displayClientMessage(
+                net.minecraft.network.chat.Component.literal("§c사용 가능한 메모장이 없습니다."), true);
         return false;
     }
 
